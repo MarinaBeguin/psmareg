@@ -57,7 +57,7 @@ class PSMARegPairDataset(Dataset[Sample]):
     def _load_label(path: str) -> torch.Tensor:
         """Load a label map as a single-channel tensor."""
         image = nib.load(path)
-        array = np.asarray(image.get_fdata(dtype=np.float32))
+        array = np.asarray(image.get_fdata(), dtype=np.int64)
         return torch.from_numpy(array).long().unsqueeze(0)
 
     def __len__(self) -> int:

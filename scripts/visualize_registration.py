@@ -20,7 +20,7 @@ import numpy as np
 import torch
 
 from data.paired_dataset import PSMARegPairDataset
-from model.network import SmallRegistrationUNet
+from models.network import SmallRegistrationUNet
 from utils.warping import warp_image_3d
 
 
