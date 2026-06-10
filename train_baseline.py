@@ -11,8 +11,8 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from data.paired_dataset import PSMARegPairDataset
-from model.losses import image_mse_loss, smoothness_loss
-from model.network import SmallRegistrationUNet
+from models.losses import image_mse_loss, smoothness_loss
+from models.network import SmallRegistrationUNet
 from utils.warping import warp_image_3d
 
 

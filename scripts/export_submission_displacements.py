@@ -20,7 +20,7 @@ import numpy as np
 import torch
 import torch.nn.functional as functional
 
-from model.network import SmallRegistrationUNet
+from models.network import SmallRegistrationUNet
 from scripts.submission_dataset import SubmissionDataset
 
 
