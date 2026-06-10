@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 import torch.nn.functional as F
 
 from data.paired_dataset import PSMARegPairDataset
-from models.losses import image_mse_loss, smoothness_loss, multiclass_dice_loss
+from models.losses import image_mse_loss, smoothness_loss, multiclass_dice_loss, lncc_loss
 from models.network import SmallRegistrationUNet
 from utils.warping import warp_image_3d
 
@@ -64,39 +64,27 @@ def _compute_batch_metrics(
     warped_ct = warp_image_3d(moving_ct, displacement)
     warped_pet = warp_image_3d(moving_pet, displacement)
 
-    fixed_ct_label = batch["fixed_ct_label"].to(device).squeeze(1)
-    moving_ct_label = batch["moving_ct_label"].to(device).squeeze(1)
+    loss_ct_dice = torch.zeros((), device=device)
 
-    num_ct_classes = int(
-        max(
-            fixed_ct_label.max().item(),
-            moving_ct_label.max().item(),
+    if "fixed_ct_label" in batch and "moving_ct_label" in batch:
+        fixed_ct_label = batch["fixed_ct_label"].to(device).squeeze(1)
+        moving_ct_label = batch["moving_ct_label"].to(device).squeeze(1)
+
+        fixed_ct_fg = (fixed_ct_label > 0).float().unsqueeze(1)
+        moving_ct_fg = (moving_ct_label > 0).float().unsqueeze(1)
+
+        warped_moving_ct_fg = warp_image_3d(
+            moving_ct_fg,
+            displacement,
+            interpolation_mode="bilinear",
         )
-    ) + 1
 
-    fixed_ct_label_oh = F.one_hot(
-        fixed_ct_label.long(),
-        num_classes=num_ct_classes,
-    ).permute(0, 4, 1, 2, 3).float()
+        loss_ct_dice = dice_loss(
+            warped_moving_ct_fg,
+            fixed_ct_fg,
+        )
 
-    moving_ct_label_oh = F.one_hot(
-        moving_ct_label.long(),
-        num_classes=num_ct_classes,
-    ).permute(0, 4, 1, 2, 3).float()
-
-    warped_moving_ct_label_oh = warp_image_3d(
-        moving_ct_label_oh,
-        displacement,
-        mode="bilinear",
-    )
-
-    loss_ct_dice = multiclass_dice_loss(
-        warped_label=warped_moving_ct_label_oh,
-        fixed_label=fixed_ct_label_oh,
-        num_classes=num_ct_classes,
-    )
-
-    loss_ct = image_mse_loss(warped_ct, fixed_ct)
+    loss_ct = lncc_loss(warped_ct, fixed_ct)
     loss_pet = image_mse_loss(warped_pet, fixed_pet)
     loss_smooth = smoothness_loss(displacement)
 
@@ -107,16 +95,17 @@ def _compute_batch_metrics(
         + lambda_ct_dice * loss_ct_dice
     )
 
-    mse_before_ct = image_mse_loss(moving_ct, fixed_ct)
+    lncc_before_ct = lncc_loss(moving_ct, fixed_ct)
     mse_before_pet = image_mse_loss(moving_pet, fixed_pet)
 
     metrics = {
         "loss": float(loss.detach().cpu()),
         "loss_ct": float(loss_ct.detach().cpu()),
         "loss_pet": float(loss_pet.detach().cpu()),
+        "loss_ct_dice": float(loss_ct_dice.detach().cpu()),
         "loss_smooth": float(loss_smooth.detach().cpu()),
-        "mse_before_ct": float(mse_before_ct.detach().cpu()),
-        "mse_after_ct": float(loss_ct.detach().cpu()),
+        "lncc_before_ct": float(lncc_before_ct.detach().cpu()),
+        "lncc_after_ct": float(loss_ct.detach().cpu()),
         "mse_before_pet": float(mse_before_pet.detach().cpu()),
         "mse_after_pet": float(loss_pet.detach().cpu()),
         "mean_disp": float(displacement.abs().mean().detach().cpu()),
@@ -125,6 +114,18 @@ def _compute_batch_metrics(
     }
 
     return loss, metrics
+
+
+def dice_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    eps: float = 1e-6,
+) -> torch.Tensor:
+    """Compute binary soft Dice loss."""
+    intersection = (pred * target).sum()
+    denominator = pred.sum() + target.sum()
+    dice = (2.0 * intersection + eps) / (denominator + eps)
+    return 1.0 - dice
 
 
 def _average_metrics(metrics_list: list[Metrics]) -> Metrics:
@@ -226,8 +227,9 @@ def _format_metrics(prefix: str, metrics: Metrics) -> str:
         f"{prefix}_ct={metrics['loss_ct']:.6f} | "
         f"{prefix}_pet={metrics['loss_pet']:.6f} | "
         f"{prefix}_smooth={metrics['loss_smooth']:.6f} | "
-        f"{prefix}_ct_before={metrics['mse_before_ct']:.6f} | "
-        f"{prefix}_ct_after={metrics['mse_after_ct']:.6f} | "
+        f"{prefix}_ct_dice={metrics['loss_ct_dice']:.6f} | "
+        f"{prefix}_ct_before={metrics['lncc_before_ct']:.6f} | "
+        f"{prefix}_ct_after={metrics['lncc_after_ct']:.6f} | "
         f"{prefix}_pet_before={metrics['mse_before_pet']:.6f} | "
         f"{prefix}_pet_after={metrics['mse_after_pet']:.6f} | "
         f"{prefix}_mean_disp={metrics['mean_disp']:.4f} | "
