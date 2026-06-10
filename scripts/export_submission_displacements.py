@@ -21,6 +21,7 @@ import torch
 import torch.nn.functional as functional
 
 from models.network import SmallRegistrationUNet
+from models.attention_unet3d import AttentionUNet3DRegistration
 from scripts.submission_dataset import SubmissionDataset
 
 
@@ -34,17 +35,34 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _load_model(checkpoint_path: Path, device: torch.device) -> SmallRegistrationUNet:
-    model = SmallRegistrationUNet().to(device)
+# def _load_model(checkpoint_path: Path, device: torch.device) -> SmallRegistrationUNet:
+#     model = SmallRegistrationUNet().to(device)
+#     checkpoint: dict[str, Any] = torch.load(
+#         checkpoint_path,
+#         map_location=device,
+#         weights_only=False,
+#     )
+#     model.load_state_dict(checkpoint["model_state_dict"])
+#     model.eval()
+#     return model
+
+def _load_model(checkpoint_path: Path, device: torch.device) -> torch.nn.Module:
+    """Load the Attention U-Net registration model."""
+    model = AttentionUNet3DRegistration(
+        in_channels=4,
+        out_channels=3,
+        features=(16, 32, 64, 128),
+    ).to(device)
+
     checkpoint: dict[str, Any] = torch.load(
         checkpoint_path,
         map_location=device,
         weights_only=False,
     )
+
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
     return model
-
 
 def _subject_id(subject: str) -> str:
     return subject.split("_")[-1]
