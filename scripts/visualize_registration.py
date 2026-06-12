@@ -20,7 +20,7 @@ import numpy as np
 import torch
 
 from data.paired_dataset import PSMARegPairDataset
-from models.network import SmallRegistrationUNet
+from models.attention_unet3d import AttentionUNet3DRegistration
 from utils.warping import warp_image_3d
 
 
@@ -60,9 +60,13 @@ def _compute_mse(image_a: torch.Tensor, image_b: torch.Tensor) -> float:
     return float(torch.mean((image_a - image_b) ** 2).detach().cpu())
 
 
-def _load_model(checkpoint_path: Path, device: torch.device) -> SmallRegistrationUNet:
+def _load_model(checkpoint_path: Path, device: torch.device) -> AttentionUNet3DRegistration:
     """Load model from checkpoint."""
-    model = SmallRegistrationUNet().to(device)
+    model = AttentionUNet3DRegistration(
+        in_channels=4,
+        out_channels=3,
+        features=(16, 32, 64, 128),
+    ).to(device)
     checkpoint: dict[str, Any] = torch.load(
         checkpoint_path,
         map_location=device,
