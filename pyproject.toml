@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "psmareg-lesion-aware-registration"
+version = "0.1.0"
+description = "Lesion-aware PET/CT registration research code"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch==2.8.0",
+    "numpy",
+    "scipy",
+    "nibabel",
+]
+
+[project.optional-dependencies]
+visualization = ["matplotlib"]
+dev = ["yapf", "pylint", "mypy", "pytest"]
+
+[tool.yapf]
+based_on_style = "google"
+column_limit = 80
+
+[tool.setuptools]
+py-modules = [
+    "train_synthetic_registration_pretraining",
+    "train_fine_tuning",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["psmareg*"]
+
+[tool.pylint.main]
+jobs = 0
+# PyTorch exposes these functions through dynamic/C-extension wrappers.
+# Pylint can infer them as non-callable although they are callable at runtime.
+# Keep not-callable checks enabled for every other namespace.
+ignored-modules = ["torch.nn.functional", "torch.linalg"]
+
+[tool.pylint.basic]
+# As in the Google Python style guide, test methods are named after the
+# behavior they check and do not need a docstring.
+no-docstring-rgx = "(__.*__|main|test.*|.*test|.*Test)$"
+# Tensor axes and coordinates conventionally use one-letter names.
+good-names = ["i", "j", "k", "x", "y", "z", "_"]
+
+[tool.pylint.design]
+# Numerical routines name their intermediate tensors and loss functions take
+# one argument per physical quantity; the limits below are those the current
+# code respects and act as a ceiling against further growth.
+max-args = 7
+max-positional-arguments = 7
+max-locals = 32
+max-attributes = 16
+max-branches = 15
+
+[tool.pylint.similarities]
+min-similarity-lines = 6
+ignore-imports = true
+ignore-signatures = true
+
+[tool.pylint.typecheck]
+# Members created dynamically by PyTorch's C extension.
+generated-members = ["torch.*"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
