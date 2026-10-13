@@ -1,4 +1,9 @@
 Learn2Reg26_PSMA/
 __pycache__/
-manifests/
 results/
+figures/
+docs/*.md
+logs/
+manifests*
+psmareg_paired_cache/
+psmareg_synthetic_cache/

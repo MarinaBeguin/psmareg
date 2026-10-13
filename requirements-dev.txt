@@ -1,0 +1,6 @@
+# Formatting, static analysis and tests. Not needed to train or run a model.
+-r requirements.txt
+yapf==0.43.0
+pylint==4.1.3
+mypy==2.4.0
+pytest==9.1.1

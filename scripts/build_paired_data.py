@@ -8,11 +8,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 PairRow = dict[str, str]
 
 
 def _load_json(json_path: Path) -> dict[str, Any]:
+    """Read a JSON file as a dictionary."""
     with json_path.open("r", encoding="utf-8") as file:
         data: dict[str, Any] = json.load(file)
     return data
@@ -53,25 +53,32 @@ def _build_rows_for_split(
 
         for followup_index in followup_indices:
             row: PairRow = {
-                "split": split_name,
-                "subject": subject,
-                "followup_index": followup_index,
-                "fixed_ct": _resolve_path(
-                    dataset_root,
-                    str(subject_entry["Baseline CT"]),
-                ),
-                "fixed_pet": _resolve_path(
-                    dataset_root,
-                    str(subject_entry["Baseline PET"]),
-                ),
-                "moving_ct": _resolve_path(
-                    dataset_root,
-                    str(subject_entry[f"Follow-up {followup_index} CT"]),
-                ),
-                "moving_pet": _resolve_path(
-                    dataset_root,
-                    str(subject_entry[f"Follow-up {followup_index} PET"]),
-                ),
+                "split":
+                    split_name,
+                "subject":
+                    subject,
+                "followup_index":
+                    followup_index,
+                "fixed_ct":
+                    _resolve_path(
+                        dataset_root,
+                        str(subject_entry["Baseline CT"]),
+                    ),
+                "fixed_pet":
+                    _resolve_path(
+                        dataset_root,
+                        str(subject_entry["Baseline PET"]),
+                    ),
+                "moving_ct":
+                    _resolve_path(
+                        dataset_root,
+                        str(subject_entry[f"Follow-up {followup_index} CT"]),
+                    ),
+                "moving_pet":
+                    _resolve_path(
+                        dataset_root,
+                        str(subject_entry[f"Follow-up {followup_index} PET"]),
+                    ),
             }
 
             if "Baseline CT Label" in subject_entry:
@@ -120,7 +127,13 @@ def build_manifests(
     dataset_root: Path,
     output_dir: Path,
 ) -> None:
-    """Build train and validation manifests from the dataset JSON."""
+    """Build train and validation manifests from the dataset JSON.
+
+    Args:
+        json_path: Dataset description of the challenge.
+        dataset_root: Root against which the JSON paths are resolved.
+        output_dir: Directory receiving the training and validation manifests.
+    """
     metadata = _load_json(json_path)
 
     train_entries = list(metadata.get("training_paired", []))
@@ -145,6 +158,7 @@ def build_manifests(
 
 
 def _parse_args() -> argparse.Namespace:
+    """Parse the manifest-building options."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--json_path", type=Path, required=True)
     parser.add_argument("--dataset_root", type=Path, required=True)
@@ -153,6 +167,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Build paired training and validation manifests from metadata."""
     args = _parse_args()
     build_manifests(
         json_path=args.json_path,

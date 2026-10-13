@@ -1,0 +1,96 @@
+#!/bin/bash
+#SBATCH --job-name=psmareg_synth_v2_Cglob
+#SBATCH --output=logs/pretraining_synth_v2_stageC_global_expert_%j.out
+#SBATCH --error=logs/pretraining_synth_v2_stageC_global_expert_%j.err
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:1
+
+set -euo pipefail
+
+# Independent global-motion expert for the stronger TransMorph-v2 cascade.
+#
+# This run deliberately does NOT initialize from StageB_v2. StageB_v2 is kept as
+# the local/anatomical refiner expert. This StageC trains the same architecture
+# from scratch with a more global curriculum, so later we can initialize a
+# hybrid fine-tuning model with:
+#   affine/coarse/global weights <- this checkpoint
+#   local/refiner weights        <- StageB_v2 checkpoint
+#
+# What this stage should learn:
+#   large affine/coarse displacement early,
+#   residual kept local and low-frequency residual discouraged.
+
+export \
+  MODEL=affine_transmorph_v2_cascade \
+  EPOCHS="${EPOCHS:-160}" \
+  INITIALIZE_FROM="${INITIALIZE_FROM:-}" \
+  OUTPUT_DIR="${OUTPUT_DIR:-results/transmorph_v2_synthetic_stageC_global_expert}" \
+  LR="${LR:-5e-5}" \
+  LAMBDA_FIELD="${LAMBDA_FIELD:-0.10}" \
+  LAMBDA_STAGE1_FIELD="${LAMBDA_STAGE1_FIELD:-0.10}" \
+  LAMBDA_AFFINE_FIELD="${LAMBDA_AFFINE_FIELD:-0.35}" \
+  LAMBDA_RESIDUAL_FIELD="${LAMBDA_RESIDUAL_FIELD:-0.02}" \
+  LAMBDA_EPE="${LAMBDA_EPE:-0.08}" \
+  LAMBDA_MULTISCALE_FIELD="${LAMBDA_MULTISCALE_FIELD:-0.05}" \
+  LAMBDA_RESIDUAL_BENDING="${LAMBDA_RESIDUAL_BENDING:-0.05}" \
+  LAMBDA_GLOBAL_RESIDUAL_PENALTY="${LAMBDA_GLOBAL_RESIDUAL_PENALTY:-0.10}" \
+  GLOBAL_RESIDUAL_TARGET_THRESHOLD="${GLOBAL_RESIDUAL_TARGET_THRESHOLD:-4.0}" \
+  GLOBAL_RESIDUAL_TARGET_SCALE="${GLOBAL_RESIDUAL_TARGET_SCALE:-10.0}" \
+  GLOBAL_RESIDUAL_DOWNSAMPLE_FACTOR="${GLOBAL_RESIDUAL_DOWNSAMPLE_FACTOR:-8}" \
+  CURRICULUM_TOTAL_EPOCHS="${CURRICULUM_TOTAL_EPOCHS:-100}" \
+  CURRICULUM_MIN_SCALE="${CURRICULUM_MIN_SCALE:-0.35}" \
+  CURRICULUM_WARMUP_FRACTION="${CURRICULUM_WARMUP_FRACTION:-0.05}" \
+  CURRICULUM_RAMP_FRACTION="${CURRICULUM_RAMP_FRACTION:-0.45}" \
+  CURRICULUM_EASY_PROBABILITY="${CURRICULUM_EASY_PROBABILITY:-0.05}" \
+  CURRICULUM_EXTRA_HARD_PROBABILITY="${CURRICULUM_EXTRA_HARD_PROBABILITY:-0.30}" \
+  CURRICULUM_EXTRA_HARD_MAX_SCALE="${CURRICULUM_EXTRA_HARD_MAX_SCALE:-1.0}" \
+  MAX_TRANSLATION="${MAX_TRANSLATION:-30.0}" \
+  MAX_ROTATION_DEGREES="${MAX_ROTATION_DEGREES:-12.0}" \
+  MAX_SCALING="${MAX_SCALING:-0.10}" \
+  MAX_AFFINE_TRANSLATION="${MAX_AFFINE_TRANSLATION:-30.0}" \
+  MAX_AFFINE_ROTATION_DEGREES="${MAX_AFFINE_ROTATION_DEGREES:-15.0}" \
+  MAX_AFFINE_SCALING="${MAX_AFFINE_SCALING:-0.10}" \
+  MAX_RESIDUAL_DISP="${MAX_RESIDUAL_DISP:-3.0}" \
+  PET_INT_AUG_PROB="${PET_INT_AUG_PROB:-1.0}" \
+  PET_INT_SCALE_LOG_STD="${PET_INT_SCALE_LOG_STD:-0.30}" \
+  PET_INT_GAMMA_RANGE="${PET_INT_GAMMA_RANGE:-0.20}" \
+  PET_INT_BIAS_RANGE="${PET_INT_BIAS_RANGE:-0.02}"
+
+set -e
+source ~/.bashrc
+set -u -o pipefail
+cd "${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-/home/mbeguin/code/psmareg-lesion-aware-registration}}"
+
+args=(--config psmareg/config/synthetic_pretraining_stage_c.py)
+[[ -n "${OUTPUT_DIR:-}" ]] && args+=(--output_dir "${OUTPUT_DIR}")
+[[ -n "${EPOCHS:-}" ]] && args+=(--epochs "${EPOCHS}")
+if [[ -n "${START_FROM:-}" ]]; then
+  args+=(--start_from "${START_FROM}" --set load_optimizer_state=true --set inherit_best_val_loss=true)
+elif [[ -v INITIALIZE_FROM ]]; then
+  if [[ -n "${INITIALIZE_FROM}" ]]; then
+    args+=(--initialize_deformable_from "${INITIALIZE_FROM}")
+  else
+    args+=(--set initialize_deformable_from=none)
+  fi
+fi
+[[ -n "${PET_INT_AUG_PROB:-}" ]] && args+=(--set "pet_independent_intensity_probability=${PET_INT_AUG_PROB}")
+[[ -n "${PET_INT_SCALE_LOG_STD:-}" ]] && args+=(--set "pet_independent_scale_log_std=${PET_INT_SCALE_LOG_STD}")
+[[ -n "${PET_INT_GAMMA_RANGE:-}" ]] && args+=(--set "pet_independent_gamma_range=${PET_INT_GAMMA_RANGE}")
+[[ -n "${PET_INT_BIAS_RANGE:-}" ]] && args+=(--set "pet_independent_bias_range=${PET_INT_BIAS_RANGE}")
+for name in \
+  MODEL NUM_WORKERS LR VALIDATION_INTERVAL SIMILARITY_DOWNSAMPLE_FACTOR VALIDATION_SIMILARITY_DOWNSAMPLE_FACTOR \
+  MAX_VAL_BATCHES SYNTHMORPH_LIKE SYNTHMORPH_CT_NOISE_STD SYNTHMORPH_CT_BIAS_AMPLITUDE SYNTHMORPH_PET_NOISE_STD SYNTHMORPH_PET_LESION_DROPOUT_PROBABILITY \
+  SYNTHMORPH_PET_FALSE_HOT_PROBABILITY SYNTHMORPH_FOV_DROPOUT_PROBABILITY SYNTHMORPH_FOV_MAX_FRACTION SYNTHMORPH_RESOLUTION_AUGMENTATION_PROBABILITY SYNTHMORPH_MIN_RESOLUTION_SCALE POSE_AWARE_PROBABILITY \
+  POSE_AWARE_ATTEMPTS POSE_MAX_TRANSLATION POSE_MAX_ROTATION_DEGREES POSE_MAX_SCALING POSE_REGION_BLUR_DOWNSAMPLE POSE_MIN_REGION_FRACTION \
+  LAMBDA_AFFINE_FIELD LAMBDA_FIELD LAMBDA_STAGE1_FIELD LAMBDA_RESIDUAL_FIELD LAMBDA_EPE LAMBDA_MULTISCALE_FIELD \
+  LAMBDA_RESIDUAL_BENDING LAMBDA_GLOBAL_RESIDUAL_PENALTY GLOBAL_RESIDUAL_TARGET_THRESHOLD GLOBAL_RESIDUAL_TARGET_SCALE GLOBAL_RESIDUAL_DOWNSAMPLE_FACTOR CURRICULUM_TOTAL_EPOCHS \
+  CURRICULUM_MIN_SCALE CURRICULUM_WARMUP_FRACTION CURRICULUM_RAMP_FRACTION CURRICULUM_EASY_PROBABILITY CURRICULUM_EXTRA_HARD_PROBABILITY CURRICULUM_EXTRA_HARD_MAX_SCALE \
+  MAX_TRANSLATION MAX_ROTATION_DEGREES MAX_SCALING MAX_AFFINE_TRANSLATION MAX_AFFINE_ROTATION_DEGREES MAX_AFFINE_SCALING \
+  MAX_RESIDUAL_DISP LAMBDA_JACOBIAN LABEL_LOSS_DOWNSAMPLE_FACTOR MAX_CT_LABEL_CLASSES_PER_BATCH JACOBIAN_MARGIN JACOBIAN_LOSS_STRIDE \
+  TARGET_GENERATION_ATTEMPTS COARSE_TARGET_DOWNSAMPLE_FACTOR; do
+  if [[ -v ${name} ]]; then
+    args+=(--set "${name,,}=${!name}")
+  fi
+done
+
+python3 train_synthetic_registration_pretraining.py "${args[@]}" "$@"
