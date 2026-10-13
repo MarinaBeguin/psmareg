@@ -29,8 +29,8 @@ The code needs Python 3.10 to 3.12 and a CUDA GPU for training. The published
 runs used PyTorch 2.8.0 built for CUDA 12.6.
 
 ```bash
-git clone https://gitlab.phys.ethz.ch/mbeguin/psmareg-lesion-aware-registration.git
-cd psmareg-lesion-aware-registration
+git clone https://github.com/MarinaBeguin/psmareg.git
+cd psmareg
 
 python3 -m venv .venv
 source .venv/bin/activate
